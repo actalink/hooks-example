@@ -9,15 +9,22 @@ import {
   useCancel,
   useListUserOperations,
   type BodyType,
+  useNonceKeys,
 } from "@actalink/react-hooks";
 import { useAccount } from "wagmi";
-import { Address, getAddress, parseUnits, encodePacked } from "viem";
+import { Address, getAddress, parseUnits, encodePacked, Hex } from "viem";
 import { UserOperation } from "viem/account-abstraction";
 import { createTransferCallData } from "@actalink/modules";
 import { toSignedPaymasterData } from "@actalink/sdk";
 import { config } from "../wagmi";
 import { useEffect, useState } from "react";
-import { additionalValidatorAddresses, defaultValidatorAddresses, erc20PaymasterUrls, erc20PaymasterAddresses, usdcAddresses } from "../constants";
+import {
+  additionalValidatorAddresses,
+  defaultValidatorAddresses,
+  erc20PaymasterUrls,
+  erc20PaymasterAddresses,
+  usdcAddresses,
+} from "../constants";
 
 function getDefaultUserOp(): UserOperation<"0.7"> {
   return {
@@ -36,24 +43,30 @@ function getDefaultUserOp(): UserOperation<"0.7"> {
 const Home: NextPage = () => {
   const { address, status, chainId } = useAccount();
   const defaultValidator = defaultValidatorAddresses[chainId ?? 137];
-  const addValidators = additionalValidatorAddresses[chainId ?? 137].split(',').map((v) => getAddress(v.trim()));
+  const addValidators = additionalValidatorAddresses[chainId ?? 137]
+    .split(",")
+    .map((v) => getAddress(v.trim()));
   const paymasterUrl = erc20PaymasterUrls[chainId ?? 137];
   const paymasterAddress = erc20PaymasterAddresses[chainId ?? 137];
   const usdcAddress = usdcAddresses[chainId ?? 137];
 
   const validators = [defaultValidator, ...addValidators];
 
- 
-  const { address: swAddress, actaAccount, error } = useActaAccount({
+  const {
+    address: swAddress,
+    actaAccount,
+    error,
+  } = useActaAccount({
     eoaAddress: address,
     eoaStatus: status,
     chainId,
     config,
-    validators
+    validators,
   });
-  console.log(`swError: ${error}`)
+  console.log(`swError: ${error}`);
   console.log(`swAddress: ${swAddress}`);
-  const { calculateActaFees, getActaFeesRecipients,getPaymasterfees } = useFees({ config });
+  const { calculateActaFees, getActaFeesRecipients, getPaymasterfees } =
+    useFees({ config });
   const { createERC20Transfer } = useMerkleSignUserOps({
     eoaAddress: address,
     config,
@@ -68,13 +81,14 @@ const Home: NextPage = () => {
 
   const { cancel } = useCancel();
   const { list } = useListUserOperations();
+  const { getPendingNonceKeys } = useNonceKeys();
 
   const [receiver, setReceiver] = useState<string>("0x");
 
   const [frequency, setFrequency] = useState<string>("minutes");
   const [volume, setVolume] = useState<number>(0);
   const [amount, setAmount] = useState<string>("0");
-  const [isDeployed, setIsDeployed] = useState<boolean>(false)
+  const [isDeployed, setIsDeployed] = useState<boolean>(false);
   const generateExecutionTimes = (
     startInMs: number,
     freq: string,
@@ -151,9 +165,19 @@ const Home: NextPage = () => {
       if (actaAccount === undefined) {
         return;
       }
-      const actaFees = await calculateActaFees(amount, validators[0]);
-      const paymasterFees = await getPaymasterfees(validators[0]);
-      const {actaFeesRecipient, paymasterFeesRecipient} = await getActaFeesRecipients(validators[0]);
+      const unusedValidators = await getPendingNonceKeys(
+        paymasterUrl,
+        validators,
+        salt as Hex
+      );
+      if (unusedValidators === undefined || unusedValidators?.length === 0) {
+        throw new Error("Transfers schedule limit exceed.");
+      }
+      console.log(unusedValidators);
+      const actaFees = await calculateActaFees(amount, unusedValidators[0]);
+      const paymasterFees = await getPaymasterfees(unusedValidators[0]);
+      const { actaFeesRecipient, paymasterFeesRecipient } =
+        await getActaFeesRecipients(unusedValidators[0]);
       console.log(`amount: ${amount}`);
       console.log(`actafees: ${actaFees}`);
       const userOps: Array<UserOperation<"0.7">> = [];
@@ -170,7 +194,7 @@ const Home: NextPage = () => {
           amount,
           actaFees,
           paymasterFees,
-          actaFeesRecipient, 
+          actaFeesRecipient,
           paymasterFeesRecipient
         );
         for (let i = 0; i < times; i++) {
@@ -180,7 +204,10 @@ const Home: NextPage = () => {
             nonce: nonce + BigInt(i),
             callData: transferData,
             paymaster: paymasterAddress,
-            paymasterData: encodePacked(['address', 'uint128', 'uint128'], [paymasterAddress, 100000n, 500000n]),
+            paymasterData: encodePacked(
+              ["address", "uint128", "uint128"],
+              [paymasterAddress, 100000n, 500000n]
+            ),
           };
           const sponsoredUserOp = await toSignedPaymasterData(
             `${paymasterUrl}/api/sign/v2`,
@@ -210,7 +237,7 @@ const Home: NextPage = () => {
       console.log(`not available sw`);
       return;
     }
-     console.log(`status: ${ await actaAccount?.isDeployed()}`)
+    console.log(`status: ${await actaAccount?.isDeployed()}`);
     // const result = await actaAccount.signMessage({ message: "Hello world" });
     // console.log(`signedMessage: ${result}`);
   };
@@ -249,18 +276,18 @@ const Home: NextPage = () => {
 
   const checkIsDeployed = async () => {
     const status = await actaAccount?.isDeployed();
-    if(status !== undefined){
-      setIsDeployed(status)
+    if (status !== undefined) {
+      setIsDeployed(status);
     }
     return status;
-  }
+  };
 
   const deployAccount = async () => {
-    if(actaAccount !== undefined){
+    if (actaAccount !== undefined) {
       const hash = await actaAccount.deployAccount();
-      console.log(`account deployed: ${hash}`)
+      console.log(`account deployed: ${hash}`);
     }
-  }
+  };
 
   const listScheduledTransfers = async () => {
     // TODO: implement list operations
@@ -273,18 +300,21 @@ const Home: NextPage = () => {
           validators: [defaultValidator, ...addValidators],
           salt,
         };
-        const useOpsList = await list(token.token as string, body as BodyType, paymasterUrl);
+        const useOpsList = await list(
+          token.token as string,
+          body as BodyType,
+          paymasterUrl
+        );
         console.log(useOpsList);
       }
     }
-
   };
 
   useEffect(() => {
-    if(swAddress !== undefined){
+    if (swAddress !== undefined) {
       checkIsDeployed();
     }
-  },[swAddress])
+  }, [swAddress]);
   return (
     <main className="w-full flex flex-col justify-center items-center">
       <div className="flex w-full justify-between items-center my-4 px-4">
@@ -367,7 +397,7 @@ const Home: NextPage = () => {
                 createTransaction();
               }}
             >
-              submit
+              schedule
             </button>
             <button
               className="px-2 py-2 bg-blue-400 rounded-md text-white font-bold"
