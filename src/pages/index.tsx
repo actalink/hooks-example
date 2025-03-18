@@ -184,7 +184,7 @@ const Home: NextPage = () => {
       const { factory, factoryData } = await actaAccount.getFactoryArgs();
       console.log(`factory: ${factory}`);
       console.log(`factoryData: ${factoryData}`);
-      const nonce = await actaAccount.getValidatorNonce();
+      const nonce = await actaAccount.getValidatorNonce(unusedValidators[0]);
       console.log(`nonce: ${nonce}`);
       if (swAddress && actaFees !== undefined && nonce) {
         const transferData = await createTransferCallData(
