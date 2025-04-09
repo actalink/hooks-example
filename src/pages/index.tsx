@@ -12,7 +12,14 @@ import {
   useNonceKeys,
 } from "@actalink/react-hooks";
 import { useAccount } from "wagmi";
-import { Address, getAddress, parseUnits, encodePacked, Hex } from "viem";
+import {
+  Address,
+  getAddress,
+  parseUnits,
+  encodePacked,
+  Hex,
+  zeroAddress,
+} from "viem";
 import { UserOperation } from "viem/account-abstraction";
 import { createTransferCallData } from "@actalink/modules";
 import { toSignedPaymasterData } from "@actalink/sdk";
@@ -77,7 +84,7 @@ const Home: NextPage = () => {
     chainId: chainId,
     config,
   });
-  const { salt } = useSalt({ eoaAddress: address, eoaStatus: status, config });
+  const { getUniqueSalt } = useSalt({ eoaAddress: address, config });
 
   const { cancel } = useCancel();
   const { list } = useListUserOperations();
@@ -165,6 +172,7 @@ const Home: NextPage = () => {
       if (actaAccount === undefined) {
         return;
       }
+      const salt = await getUniqueSalt();
       const unusedValidators = await getPendingNonceKeys(
         paymasterUrl,
         validators,
@@ -262,6 +270,7 @@ const Home: NextPage = () => {
   };
 
   const cancelPendingTransactions = async () => {
+    const salt = await getUniqueSalt();
     const token = await fetchSIWEToken(paymasterUrl);
     if (token) {
       if (salt) {
@@ -293,6 +302,7 @@ const Home: NextPage = () => {
     // TODO: implement list operations
     // Check why a different salt for smart wallet would not be able to fetch the scheduled operations from paymaster
     // get authtoken from SIWE auth
+    const salt = await getUniqueSalt();
     const token = await fetchSIWEToken(paymasterUrl);
     if (token) {
       if (salt) {
