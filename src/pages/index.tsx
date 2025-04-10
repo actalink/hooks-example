@@ -4,7 +4,6 @@ import {
   useActaAccount,
   useFees,
   useMerkleSignUserOps,
-  useSalt,
   useSIWE,
   useCancel,
   useListUserOperations,
@@ -63,6 +62,7 @@ const Home: NextPage = () => {
     address: swAddress,
     actaAccount,
     error,
+    salt,
   } = useActaAccount({
     eoaAddress: address,
     eoaStatus: status,
@@ -72,6 +72,7 @@ const Home: NextPage = () => {
   });
   console.log(`swError: ${error}`);
   console.log(`swAddress: ${swAddress}`);
+  console.log(`salt: ${salt}`);
   const { calculateActaFees, getActaFeesRecipients, getPaymasterfees } =
     useFees({ config });
   const { createERC20Transfer } = useMerkleSignUserOps({
@@ -84,7 +85,6 @@ const Home: NextPage = () => {
     chainId: chainId,
     config,
   });
-  const { getUniqueSalt } = useSalt({ eoaAddress: address, config });
 
   const { cancel } = useCancel();
   const { list } = useListUserOperations();
@@ -172,7 +172,6 @@ const Home: NextPage = () => {
       if (actaAccount === undefined) {
         return;
       }
-      const salt = await getUniqueSalt();
       const unusedValidators = await getPendingNonceKeys(
         paymasterUrl,
         validators,
@@ -270,7 +269,6 @@ const Home: NextPage = () => {
   };
 
   const cancelPendingTransactions = async () => {
-    const salt = await getUniqueSalt();
     const token = await fetchSIWEToken(paymasterUrl);
     if (token) {
       if (salt) {
@@ -302,7 +300,6 @@ const Home: NextPage = () => {
     // TODO: implement list operations
     // Check why a different salt for smart wallet would not be able to fetch the scheduled operations from paymaster
     // get authtoken from SIWE auth
-    const salt = await getUniqueSalt();
     const token = await fetchSIWEToken(paymasterUrl);
     if (token) {
       if (salt) {
